@@ -5,7 +5,7 @@ Plugin URI: http://memberbuddy.com/docs/theme-shortcodes
 Description: A collection of all handy theme related shortcodes, provided as a plugin so as to be theme agnostic
 Author: Rob Holmes
 Author URI: http://memberbuddy.com/people/rob
-Version: 0.0.1
+Version: 0.0.3
 Tags: Wordpress
 License: GPL2
 
