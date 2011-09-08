@@ -45,8 +45,8 @@ class wpThemeShortcodes {
 		add_shortcode( 'nav-menu',array(&$this, 'shortcode_nav_menu' ));
 
 		/* Add entry-specific shortcodes. */
+		add_shortcode( 'entry-link', array(&$this,'shortcode_entry_link' ));
 		add_shortcode( 'entry-title', array(&$this,'shortcode_entry_title' ));
-		add_shortcode( 'page-title', array(&$this,'shortcode_page_title' ));
 		add_shortcode( 'entry-author-link', array(&$this,'shortcode_entry_author_link' ));
 		add_shortcode( 'entry-author', array(&$this,'shortcode_entry_author' ));
 		add_shortcode( 'entry-terms', array(&$this,'shortcode_entry_terms' ));
@@ -54,7 +54,7 @@ class wpThemeShortcodes {
 		add_shortcode( 'entry-published', array(&$this,'shortcode_entry_published' ));
 		add_shortcode( 'entry-edit-link', array(&$this,'shortcode_entry_edit_link' ));
 		add_shortcode( 'entry-shortlink', array(&$this,'shortcode_entry_shortlink' ));
-		add_shortcode( 'entry-link', array(&$this,'shortcode_entry_link' ));
+		add_shortcode( 'entry-url', array(&$this,'shortcode_entry_url' ));
 		add_shortcode( 'entry-date', array(&$this,'shortcode_entry_date' ));
 		add_shortcode( 'entry-cats', array(&$this,'shortcode_entry_cats' ));
 		add_shortcode( 'entry-tags', array(&$this,'shortcode_entry_tags' ));
@@ -72,9 +72,86 @@ class wpThemeShortcodes {
 		add_shortcode( 'child-pages',array(&$this, 'shortcode_list_pages' ));
 		add_shortcode( 'sibling-pages', array(&$this,'shortcode_list_pages' ));
 		add_shortcode( 'list-pages', array(&$this,'shortcode_list_pages' ));
+		
+		// Other shortcodes
+		add_shortcode( 'category-group-posts', array(&$this,'shortcode_category_group_posts' ));
 
 	}
 
+	
+	// Added for derek
+	function shortcode_category_group_posts($atts, $content, $tag) {
+		global $post;
+		
+		$defaults = array(
+			'type'                     => 'post',
+			'child_of'                 => 0,
+			'parent'                   => 0,
+			'orderby'                  => 'name',
+			'order'                    => 'ASC',
+			'hide_empty'               => 1,
+			'hierarchical'             => 0,
+			'exclude'                  => '',
+			'include'                  => '',
+			'number'                   => '',
+			'more' 					   => 'more...',
+			'columns' 				   => 2,
+			'taxonomy'                 => 'category',
+			'separator'				   => ', ',
+			'pad_counts'               => false );
+		
+		// Merge user provided atts with defaults
+		$atts = shortcode_atts( $defaults, $atts );
+		
+		$categories=  get_categories($atts); 
+		
+		// Go through each of the categories one by one
+		$counter = 0;
+		$output = '';
+		$current_column = 0;
+		
+		foreach ($categories as $category) {
+			
+			$build = '<div class="category-group-entry"><div class="category-group-category"><a href="' . get_category_link( $category->cat_ID ) . '">' . $category->cat_name . '</a> <span class="category-group-count">('. $category->category_count .')</span></div>';
+			$build_items = array();
+			
+			// For each category that exists get the posts in that category
+			$args = array( 'numberposts' => 5, 'offset'=> 0, 'category' => $category->cat_ID );
+			$myposts = get_posts( $args );
+			foreach( $myposts as $post ) {
+				setup_postdata($post); 
+				$build_items[] = '<span class="category-group-post"><a href="' .  get_permalink() . '">' . get_the_title() . '</a></span>';
+			}
+			$build .= implode( $atts['separator'] ,$build_items);
+			$build .= ' <a href="' . get_category_link( $category->cat_ID ) . '">' . $atts['more'] . '</a>';
+			$build .= '</div>'; // close the wrapping div
+			
+			$counter++;
+			
+			// If the counter is divisible by the column number then increment the counter
+			if ( $counter % $atts['columns']) { $current_column++; }
+			
+			// Wrap the counter back to zero after reaching max columsn
+			if ($current_column >= $atts['columns']) { $current_column = 0; }
+			
+			$output[$current_column] .= $build;
+			
+		}
+		
+		
+		$final = '';
+		
+		$final .= '<table class="category-group"><tr>';
+			foreach ($output as $html) {
+				$final .=  '<td>' . $html. '</td>';
+			}
+		
+		$final .=  '</tr></table>';
+		
+		return $final;
+			
+	} // function
+	
 	
 	
 	// List Pages Shortcodes Originally by Aaron Harp, Ben Huson http://www.aaronharp.com
@@ -338,7 +415,7 @@ class wpThemeShortcodes {
 	}
 
 	// Page title
-	function shortcode_page_title() {
+	function shortcode_entry_title() {
 		global $post;
 		$title = get_the_title();
 		return $title;
@@ -347,7 +424,7 @@ class wpThemeShortcodes {
 
 	
 	// Displays a post's title with a link to the post.
-	function shortcode_entry_title() {
+	function shortcode_entry_link() {
 		global $post;
 
 		if ( is_front_page() && !is_home() )
@@ -399,7 +476,7 @@ class wpThemeShortcodes {
 	}
 
 
-	function shortcode_entry_link($attr) {
+	function shortcode_entry_url($attr) {
 		global $post;
 		return  get_permalink( $post->ID) ;
 	}
