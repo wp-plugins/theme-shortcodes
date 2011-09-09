@@ -5,7 +5,7 @@ Plugin URI: http://memberbuddy.com/docs/theme-shortcodes
 Description: A collection of all handy theme related shortcodes, provided as a plugin so as to be theme agnostic
 Author: Rob Holmes
 Author URI: http://memberbuddy.com/people/rob
-Version: 0.0.3
+Version: 0.0.4
 Tags: Wordpress
 License: GPL2
 
@@ -30,12 +30,22 @@ class wpThemeShortcodes {
 	
 	static $domain = 'theme-shortcodes';
 	
-	// Force singelton - Technique by Aaron D. Campbell
+	// define some global flags
+	public $plusone_flag = false;	// Has the plusone shortcode been used on this page
+	public $twitter_flag = false;	// Has the twitter shortcode been used on this page
+	public $like_flag = false;		// Has the facebook like shortcode been used on this page
+	public $adsense_flag = false;	// has the adsense shortcode been used yet
+	public $gmap_flag = false;		 // has the google map shortcode been used yet
+	public $gmap_inline_script = ''; // Store the google maps inline javascript for the shortcodes
+	public $views_flag = false;	// Has the views counter already been incremented on this page view
+	
+	// Force singelton
 	static $instance = false;
 	public static function getInstance() {
 		return (self::$instance ? self::$instance : self::$instance = new self);
 	}
 
+	// Construct
 	private function __construct() {
 		/* Add theme-specific shortcodes. */
 		add_shortcode( 'the-year', array(&$this,'shortcode_the_year' ));
@@ -58,6 +68,10 @@ class wpThemeShortcodes {
 		add_shortcode( 'entry-date', array(&$this,'shortcode_entry_date' ));
 		add_shortcode( 'entry-cats', array(&$this,'shortcode_entry_cats' ));
 		add_shortcode( 'entry-tags', array(&$this,'shortcode_entry_tags' ));
+		
+		// Views counter
+		add_shortcode( 'entry-views', array(&$this,'shortcode_entry_views' ));
+		add_filter('the_content', array(&$this,'shortcode_entry_views_filter_the_content'));
 		 
 		/* Add comment-specific shortcodes. */
 		add_shortcode( 'comment-published', array(&$this,'shortcode_comment_published' ));
@@ -67,22 +81,58 @@ class wpThemeShortcodes {
 		add_shortcode( 'comment-permalink', array(&$this,'shortcode_comment_permalink' ));
 		add_shortcode( 'comment-count', array(&$this,'shortcode_entry_comments_count' ));
 
-		
-		// List Pages Shortcodes Originally by Aaron Harp, Ben Huson http://www.aaronharp.com
+		// List Pages Shortcodes by Aaron Harp, Ben Huson http://www.aaronharp.com
 		add_shortcode( 'child-pages',array(&$this, 'shortcode_list_pages' ));
 		add_shortcode( 'sibling-pages', array(&$this,'shortcode_list_pages' ));
 		add_shortcode( 'list-pages', array(&$this,'shortcode_list_pages' ));
 		
 		// Other shortcodes
 		add_shortcode( 'category-group-posts', array(&$this,'shortcode_category_group_posts' ));
-
+		//add_shortcode( 'category-group-category', array(&$this,'shortcode_category_group_category' ));
+	
+		// Navigation
+		add_shortcode( 'page-nav', array(&$this,'shortcode_page_nav' ));
+		
+		// Google Charts
+		add_shortcode('chart', array(&$this,'shortcode_chart'));
+		
+		// Blog Information
+		add_shortcode('bloginfo', array(&$this,'shortcode_bloginfo'));
+		
+		// google plus one
+		add_shortcode('plusone', array(&$this,'shortcode_plusone'));
+		add_action('init', array(&$this, 'shortcode_plusone_register_script'));
+		add_action('wp_footer', array(&$this, 'shortcode_plusone_print_script'));	
+		
+		// facebook like
+		add_shortcode('like',  array(&$this,'shortcode_like'));
+		add_action('init', array(&$this, 'shortcode_like_register_script'));
+		add_action('wp_footer', array(&$this, 'shortcode_like_print_script'));	
+		
+		// Twitter Tweet
+		add_shortcode('tweet',  array(&$this,'shortcode_twitter'));
+		add_action('init', array(&$this, 'shortcode_twitter_register_script'));
+		add_action('wp_footer', array(&$this, 'shortcode_twitter_print_script'));	
+		
+		// Escape a shortcode
+		add_shortcode('esc',  array(&$this,'shortcode_escape'));
+		
+		// Adsense
+		add_shortcode('adsense', array(&$this,'shortcode_adsense'));
+		add_action('init', array(&$this, 'shortcode_adsense_register_script'));
+		add_action('wp_footer', array(&$this, 'shortcode_adsense_print_script'));
+		
+		// Google maps
+		add_shortcode('gmap', array(&$this,'shortcode_gmap'));		
+		add_action('init', array(&$this, 'shortcode_gmap_register_script'));
+		add_action('wp_head', array(&$this,'shortcode_gmap_print_style')); // Add the google maps api to header
+		add_action('wp_footer', array(&$this, 'shortcode_gmap_print_script'));
 	}
 
 	
-	// Added for derek
+	// Based on code By Rob Holmes http://onemanonelaptop.com
 	function shortcode_category_group_posts($atts, $content, $tag) {
-		global $post;
-		
+		global $post;	
 		$defaults = array(
 			'type'                     => 'post',
 			'child_of'                 => 0,
@@ -154,7 +204,7 @@ class wpThemeShortcodes {
 	
 	
 	
-	// List Pages Shortcodes Originally by Aaron Harp, Ben Huson http://www.aaronharp.com
+	// List Pages Shortcode based on code by Aaron Harp, Ben Huson http://www.aaronharp.com
 	function shortcode_list_pages( $atts, $content, $tag ) {
 		
 		global $post;
@@ -213,33 +263,33 @@ class wpThemeShortcodes {
 
 	
 	
-	// Shortcode to display the current year. - functionality provided by Justin Tadlock/Hybrid theme
+	// Shortcode to display the current year based on code by Justin Tadlock/Hybrid theme
 	function shortcode_the_year() {
 		return date( __( 'Y', $domian ) );
-	}
+	} // function
 
 	
-	// Shortcode to display a link back to the site.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Shortcode to display a link back to the site based on code by Justin Tadlock/Hybrid theme
 	function shortcode_site_link() {
 		return '<a class="site-link" href="' . home_url() . '" title="' . esc_attr( get_bloginfo( 'name' ) ) . '" rel="home"><span>' . get_bloginfo( 'name' ) . '</span></a>';
-	}
+	} // function
 
 
 	
-	// Shortcode to display a link to the theme page.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Shortcode to display a link to the theme page based on code by Justin Tadlock/Hybrid theme
 	function shortcode_theme_link() {
 		$data = get_theme_data( trailingslashit( TEMPLATEPATH ) . 'style.css' );
 		return '<a class="theme-link" href="' . esc_url( $data['URI'] ) . '" title="' . esc_attr( $data['Name'] ) . '"><span>' . esc_attr( $data['Name'] ) . '</span></a>';
-	}
+	} // function
 
 
-	// Shortcode to display a link to the child theme's page.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Shortcode to display a link to the child theme's page based on code by Justin Tadlock/Hybrid theme
 	function shortcode_child_link() {
 		$data = get_theme_data( trailingslashit( STYLESHEETPATH ) . 'style.css' );
 		return '<a class="child-link" href="' . esc_url( $data['URI'] ) . '" title="' . esc_attr( $data['Name'] ) . '"><span>' . esc_attr( $data['Name'] ) . '</span></a>';
-	}
+	} // function
 	
-	// Shortcode to display a login link or logout link.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Shortcode to display a login link or logout link based on code by Justin Tadlock/Hybrid theme
 	function shortcode_loginout_link() {
 		$domain = $domian;
 		if ( is_user_logged_in() )
@@ -248,16 +298,16 @@ class wpThemeShortcodes {
 			$out = '<a class="login-link" href="' . esc_url( wp_login_url( site_url( $_SERVER['REQUEST_URI'] ) ) ) . '" title="' . esc_attr__( 'Log into this account', $domain ) . '">' . __( 'Log in', $domain ) . '</a>';
 
 		return $out;
-	}
+	} // function
 
-	// Displays query count and load time if the current user can edit themes.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Displays query count and load time if the current user can edit themes. Based on code by Justin Tadlock/Hybrid theme
 	function shortcode_query_counter() {
 		if ( current_user_can( 'edit_themes' ) )
 			$out = sprintf( __( 'This page loaded in %1$s seconds with %2$s database queries.', $domian ), timer_stop( 0, 3 ), get_num_queries() );
 		return $out;
-	}
+	} // function
 
-	// Displays a nav menu that has been created from the Menus screen in the admin.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Displays a nav menu that has been created from the Menus screen in the admin. Based on code by Justin Tadlock/Hybrid theme
 	function shortcode_nav_menu( $attr ) {
 
 		$attr = shortcode_atts(
@@ -280,10 +330,10 @@ class wpThemeShortcodes {
 		$attr['echo'] = false;
 
 		return wp_nav_menu( $attr );
-	}
+	} // function
 
 
-	// Displays the edit link for an individual post.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Displays the edit link for an individual post. Based on code by Justin Tadlock/Hybrid theme
 	function shortcode_entry_edit_link( $attr ) {
 		global $post;
 		$domain = $domian;
@@ -295,16 +345,16 @@ class wpThemeShortcodes {
 		$attr = shortcode_atts( array( 'before' => '', 'after' => '' ), $attr );
 
 		return $attr['before'] . '<span class="edit"><a class="post-edit-link" href="' . get_edit_post_link( $post->ID ) . '" title="' . sprintf( esc_attr__( 'Edit %1$s', $domain ), $post_type->labels->singular_name ) . '">' . __( 'Edit', $domain ) . '</a></span>' . $attr['after'];
-	}
+	} // function
 
-	// Displays the published date of an individual post.  - functionality provided by Justin Tadlock/Hybrid theme
+	// Displays the published date of an individual post.  Based on code by Justin Tadlock/Hybrid theme
 	function shortcode_entry_published( $attr ) {
 		$domain = $domian;
 		$attr = shortcode_atts( array( 'before' => '', 'after' => '', 'format' => get_option( 'date_format' ) ), $attr );
 
 		$published = '<span class="entry-published" title="' . sprintf( get_the_time( esc_attr__( 'l, F jS, Y, g:i a', $domain ) ) ) . '">' . sprintf( get_the_time( $attr['format'] ) ) . '</abbr>';
 		return $attr['before'] . $published . $attr['after'];
-	}
+	} // function
 
 	// Shortcode entry date 
 	function shortcode_entry_date( $attr ) {
@@ -313,11 +363,7 @@ class wpThemeShortcodes {
 
 		$published = '<span class="entry-date" >' . sprintf( get_the_time( $attr['format'] ) ) . '</span>';
 		return $attr['before'] . $published . $attr['after'];
-	}
-
-
-
-
+	} // function
 
 	// Displays a post's number of comments wrapped in a link to the comments area.
 	function shortcode_entry_comments_link( $attr ) {
@@ -342,7 +388,8 @@ class wpThemeShortcodes {
 			$comments_link = $attr['before'] . $comments_link . $attr['after'];
 
 		return $comments_link;
-	}
+	} // function
+
 
 
 	// Return The Comment Count
@@ -352,7 +399,7 @@ class wpThemeShortcodes {
 		$comments_link = '';
 		$number = get_comments_number();
 		return '<span class="comment-count">' . $number . " Comments" . "</span>";
-	}
+	} // function
 
 	// Return the categories
 	function shortcode_entry_cats_shortcode ($attr) {
@@ -371,7 +418,7 @@ class wpThemeShortcodes {
 		}
 		
 		return '<span class="entry-cats">' . implode(', ',$output) . "</span>";
-	}
+	} // function
 
 	// Return the tags
 	function shortcode_entry_tags($attr) {
@@ -382,10 +429,8 @@ class wpThemeShortcodes {
 		foreach ($tags as $tag) {
 			$output[] = "<a href='" . $tag->slug . "' >" . $tag->name  . "</a>";
 		}
-		
 		return '<span class="entry-tags">' . implode(', ',$output) . "</span>";
-		
-	}
+	} // function
 
 
 	
@@ -394,12 +439,14 @@ class wpThemeShortcodes {
 		$attr = shortcode_atts( array( 'before' => '', 'after' => '' ), $attr );
 		$author = '<span class="entry-author-link"><a  href="' . get_author_posts_url( get_the_author_meta( 'ID' ) ) . '" title="' . esc_attr( get_the_author_meta( 'display_name' ) ) . '">' . get_the_author_meta( 'display_name' ) . '</a></span>';
 		return $attr['before'] . $author . $attr['after'];
-	}
+	} // function
+	
+	// Displays just the authors name
 	function shortcode_entry_author( $attr ) {
 		$attr = shortcode_atts( array( 'before' => '', 'after' => '' ), $attr );
 		$author = '<span class="entry-author">' . get_the_author_meta( 'display_name' ) . '</span>';
 		return $attr['before'] . $author . $attr['after']; 
-	}
+	} // function
 	
 	
 	// Entry Terms
@@ -412,14 +459,14 @@ class wpThemeShortcodes {
 		$attr['after'] = ( empty( $attr['after'] ) ? '</span>' : '<span class="after">' . $attr['after'] . '</span></span>' );
 
 		return get_the_term_list( $attr['id'], $attr['taxonomy'], $attr['before'], $attr['separator'], $attr['after'] );
-	}
+	} // function
 
 	// Page title
 	function shortcode_entry_title() {
 		global $post;
 		$title = get_the_title();
 		return $title;
-	}
+	} // function
 
 
 	
@@ -450,16 +497,13 @@ class wpThemeShortcodes {
 		}
 
 		return $title;
-	}
+	} // function
 
 	
 	// Displays the shortlinke of an individual entry.
 
 	function shortcode_entry_shortlink( $attr ) {
 		global $post;
-
-
-
 		$attr = shortcode_atts(
 			array(
 				'text' => __( 'Shortlink', $domian ),
@@ -469,17 +513,15 @@ class wpThemeShortcodes {
 			),
 			$attr
 		);
-
 		$shortlink = wp_get_shortlink( $post->ID );
-
 		return "{$attr['before']}<a class='shortlink' href='{$shortlink}' title='" . esc_attr( $attr['title'] ) . "' rel='shortlink'>{$attr['text']}</a>{$attr['after']}";
-	}
+	} // function
 
-
+	// returns just the permalink
 	function shortcode_entry_url($attr) {
 		global $post;
 		return  get_permalink( $post->ID) ;
-	}
+	} // function
 
 	
 	// Displays the published date and time of an individual comment.
@@ -488,10 +530,9 @@ class wpThemeShortcodes {
 		$domain = $domian;
 		$link = '<span class="published">' . sprintf( __( '%1$s at %2$s', $domain ), '<abbr class="comment-date" title="' . get_comment_date( esc_attr__( 'l, F jS, Y, g:i a', $domain ) ) . '">' . get_comment_date() . '</abbr>', '<abbr class="comment-time" title="' . get_comment_date( esc_attr__( 'l, F jS, Y, g:i a', $domain ) ) . '">' . get_comment_time() . '</abbr>' ) . '</span>';
 		return $link;
-	}
+	} // function
 
-	//Displays the comment author of an individual comment.
-
+	// Displays the comment author of an individual comment.
 	function shortcode_comment_author( $attr ) {
 		global $comment;
 
@@ -510,7 +551,7 @@ class wpThemeShortcodes {
 
 		/* @deprecated 0.8. Create a custom shortcode instead of filtering shortcode_comment_author. */
 		return apply_filters( shortcode_get_prefix() . '_comment_author', $output );
-	}
+	} // function  
 
 	// Displays the permalink to an individual comment.
 	function shortcode_comment_permalink( $attr ) {
@@ -520,7 +561,7 @@ class wpThemeShortcodes {
 		$domain = $domian;
 		$link = '<a class="permalink" href="' . get_comment_link( $comment->comment_ID ) . '" title="' . sprintf( esc_attr__( 'Permalink to comment %1$s', $domain ), $comment->comment_ID ) . '">' . __( 'Permalink', $domain ) . '</a>';
 		return $attr['before'] . $link . $attr['after'];
-	}
+	} // function  
 
 	// Displays a comment's edit link to users that have the capability to edit the comment.
 	function shortcode_comment_edit_link( $attr ) {
@@ -538,7 +579,7 @@ class wpThemeShortcodes {
 		$link = apply_filters( 'edit_comment_link', $link, $comment->comment_ID );
 
 		return $attr['before'] . $link . $attr['after'];
-	}
+	} // function  
 
 	// Displays a reply link for the 'comment' comment_type if threaded comments are enabled.
 
@@ -559,8 +600,612 @@ class wpThemeShortcodes {
 		$attr = shortcode_atts( $defaults, $attr );
 
 		return get_comment_reply_link( $attr );
-	}
+	} // function  
+
+
+
+	function shortcode_page_nav($atts) { 
+		global $post;
 		
+		$defaults = array(
+			'prev' => '&laquo; Newer Entries',
+			'next' => 'Older Entries &raquo;'
+		);
+		
+		// Merge user provided atts with defaults
+		$atts = shortcode_atts( $defaults, $atts );
+		
+		if (function_exists('wp_pagenavi') ) { 
+			wp_pagenavi();
+		} else {   
+			if ( get_next_posts_link() || get_previous_posts_link() ) { ?>
+			
+				<div class="page-nav">
+					<div class="page-nav-prev fl"><?php previous_posts_link(__($atts['prev'], $this->domain)) ?></div>
+					<div class="page-nav-next fr"><?php next_posts_link(__($atts['next'], $this->domain)) ?></div>
+				</div>	
+			
+			<?php } 
+		}   
+	} // function  
+
+
+
+	// Google charts integration - http://blue-anvil.com/archives/8-fun-useful-shortcode-functions-for-wordpress/
+	function shortcode_chart( $atts ) {
+		extract(shortcode_atts(array(
+			'data' => '',
+			'colors' => '',
+			'size' => '400x200',
+			'bg' => 'ffffff',
+			'title' => '',
+			'labels' => '',
+			'advanced' => '',
+			'type' => 'pie'
+		), $atts));
+
+		switch ($type) {
+			case 'line' :
+				$charttype = 'lc'; break;
+			case 'xyline' :
+				$charttype = 'lxy'; break;
+			case 'sparkline' :
+				$charttype = 'ls'; break;
+			case 'meter' :
+				$charttype = 'gom'; break;
+			case 'scatter' :
+				$charttype = 's'; break;
+			case 'venn' :
+				$charttype = 'v'; break;
+			case 'pie' :
+				$charttype = 'p3'; break;
+			case 'pie2d' :
+				$charttype = 'p'; break;
+			default :
+				$charttype = $type;
+			break;
+		}
+
+		if ($title) $string .= '&chtt='.$title.'';
+		if ($labels) $string .= '&chl='.$labels.'';
+		if ($colors) $string .= '&chco='.$colors.'';
+		$string .= '&chs='.$size.'';
+		$string .= '&chd=t:'.$data.'';
+		$string .= '&chf='.$bg.'';
+
+		return '<img title="'.$title.'" src="http://chart.apis.google.com/chart?cht='.$charttype.''.$string.$advanced.'" alt="'.$title.'" />';
+	} // function
+
+	
+	
+	// Blog Info - http://blue-anvil.com/archives/8-fun-useful-shortcode-functions-for-wordpress/
+	function bloginfo_shortcode( $atts ) {
+		$defaults = array(
+			'key' => '',
+		);
+		$atts = shortcode_atts( $defaults, $atts );
+		
+		return get_bloginfo($key);
+	} // function
+
+
+	
+	
+	// Google Plus One Shortcode
+	function shortcode_plusone( $atts, $content=null ){
+		$this->plusone_flag = true;
+	 
+		extract(shortcode_atts(array(
+				'url' => '',
+				'lang' => 'en-US',
+				'parsetags' => 'onload',
+				'count' => 'false',
+				'size' => 'medium',
+				'callback' => '',
+		 
+				), $atts));
+
+			// Check for $content and set to URL if not provided
+			if($content != null) $url = $content;
+			$plus1_code = '<div class="g-plusone" data-href="' . $url . '" data-count="' . $count . '" data-size="' . $size . '" data-callback="' . $callback . '"  ></div>';
+	 
+		return $plus1_code;
+	} // function
+ 
+ 
+ 	// Register the twitter script
+	function shortcode_plusone_register_script() { } // function
+
+	// Print the twitter script only if the shortcode was used
+	function shortcode_plusone_print_script() {
+		if($this->plusone_flag){
+			echo <<<HTML
+	 
+			<script type="text/javascript">
+			  (function() {
+				var po = document.createElement('script'); po.type = 'text/javascript'; po.async = true;
+				po.src = 'https://apis.google.com/js/plusone.js';
+				var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(po, s);
+			  })();
+			</script>
+HTML;
+		}
+	} // function
+ 
+ 
+ 
+ 
+ 
+
+
+	// Facebook like button
+	function shortcode_like( $atts, $content=null ){
+		// set the flag if the shortcode is used
+		$this->like_flag = true;
+	
+		extract(shortcode_atts(array(
+				'send' => 'false',
+				'layout' => 'standard',
+				'show_faces' => 'true',
+				'width' => '400px',
+				'action' => 'like',
+				'font' => '',
+				'colorscheme' => 'light',
+				'ref' => '',
+				'locale' => 'en_US',
+				'appId' => '' // Put your AppId here is you have one
+		), $atts));
+	
+		// set the global locale variable
+		$this->likelocale = $locale;
+		$this->likeappId = $appId;
+		
+    $output = <<<HTML
+        <fb:like ref="$ref" href="$content" layout="$layout" colorscheme="$colorscheme" action="$action" send="$send" width="$width" show_faces="$show_faces" font="$font"></fb:like>
+HTML;
+ 
+		return $output;
+	} // function
+
+	function shortcode_like_register_script() {}
+	
+	// Add the facebook like javascript if the shortcode was used
+	function shortcode_like_print_script() {
+		wp_register_script('like','http://connect.facebook.net/' . $this->likelocale . '/all.js#appId=' . $this->likeappId . '&amp;xfbml=1');
+		if ($this->like_flag) {
+			wp_print_scripts('like'); 
+		} else {
+			return;
+		}
+	} // function
+	
+	
+	
+	// Based on code by Nicholas P. Iler -- http://www.ilertech.com/2011/07/add-twitter-share-button-to-wordpress-3-0-with-a-simple-shortcode/
+	function shortcode_twitter( $atts, $content=null ) {
+		// set the flag so we know it has been used
+		$this->twitter_flag = true;
+		
+		// extract the defaults
+		extract(shortcode_atts(array(
+			'url' => null,
+			'counturl' => null,
+			'via' => '',
+			'text' => '',
+			'related' => '',
+			'countbox' => 'none', // none, horizontal, vertical
+	 
+		), $atts));
+ 
+		// Check for count url and set to $url if not provided
+		if($counturl == null) $counturl = $url;
+	 
+		// build the html
+		$output = <<<HTML
+	<a href="http://twitter.com/share" class="twitter-share-button"
+		data-url="$url"
+		data-counturl="$counturl"
+		data-via="$via"
+		data-text="$text"
+		data-related="$related"
+		data-count="$countbox"></a>
+HTML;
+	 
+		return $output;
+	} // function
+	
+	// Register the twitter script
+	function shortcode_twitter_register_script() {
+			wp_register_script('twitterwidgets','http://platform.twitter.com/widgets.js');	
+	} // function
+
+	// Print the twitter script only if the shortcode was used
+	function shortcode_twitter_print_script() {
+		if ($this->twitter_flag) {
+			wp_print_scripts('twitterwidgets'); 
+		} else {
+			return;
+		}
+	}
+	
+	
+
+	// HTML Special Chars shortcode
+	function shortcode_escape( $atts, $content=null ){
+			$output = htmlentities($content);
+			return $output;
+	} // function
+ 
+ 
+ 
+	// Add the google adsense script to the site
+	function shortcode_adsense_register_script() {
+			wp_register_script('adsense','http://pagead2.googlesyndication.com/pagead/show_ads.js');	
+	} // function
+ 
+	// adsense shortcode
+	function shortcode_adsense( $atts ) {
+		$this->adsense_flag = true;
+        extract(shortcode_atts(array(
+                'ad_client' => '',
+                'ad_slot' => '',
+                'width' => '',
+                'height' => '',
+        ), $atts));
+        
+		$return .='<script type="text/javascript"><!--'. "\n";
+		$return .='google_ad_client = "' . $ad_client . '"'. "\n";
+		$return .='google_ad_slot = "' . $ad_slot . '"'. "\n";
+		$return .='google_ad_width = ' . $width . ''. "\n";
+		$return .='google_ad_height = ' . $height . ''. "\n";
+		$return .='//-->'. "\n";
+		$return .='</script>'. "\n";
+
+		return $return;
+	} // function
+
+	// adsense scripts
+	function shortcode_adsense_print_script() {
+		if (!$this->adsense_flag) { return; }
+		wp_print_scripts('adsense'); 
+	} // function
+	
+	
+	
+	
+	// output the entry views
+	function shortcode_entry_views() {
+		global $post;
+		$count = get_post_meta($post->ID, 'entry_views_count', true);
+		if($count==''){
+			delete_post_meta($post->ID, 'entry_views_count');
+			add_post_meta($post->ID, 'entry_views_count', '0');
+			$count = 0;
+		}
+		return '<span class="entry-views">' . $count . ' Views</span>';
+	}
+	
+	// attach the increment counter to the_content filter
+	function shortcode_entry_views_filter_the_content($content ) {
+
+		if  (!$this->views_flag) {
+			$this->shortcode_increment_entry_views(get_the_ID());
+		}
+		$this->views_flag = true;
+		return $content;
+	} // function
+
+	// increment the views counter
+	function shortcode_increment_entry_views($postID) {
+		$count_key = 'entry_views_count';
+		$count = get_post_meta($postID, $count_key, true);
+		if($count==''){
+			$count = 0;
+			delete_post_meta($postID, $count_key);
+			add_post_meta($postID, $count_key, '0');
+		}else{
+			$count++;
+			update_post_meta($postID, $count_key, $count);
+		}
+	} // function
+	 
+
+	
+	
+	
+	// **********************************************************************************************
+	
+	
+
+
+	// Add the image fix for google maps only if the shortcode has been used
+	function shortcode_gmap_print_style() {
+		if  ($this->gmap_flag) {
+		?>
+		<style type="text/css">
+			.entry-content img {max-width: 100000%; /* override */}
+		</style> 
+		<?php
+		}
+	} // function
+
+	// insert the script for google maps
+	function shortcode_gmap_register_script() {
+		wp_register_script('gmap','http://maps.google.com/maps/api/js?sensor=false');		
+	} // function
+
+	// gmap scripts
+	function shortcode_gmap_print_script() {
+		if (!$this->gmap_flag) { return; }
+		wp_print_scripts('gmap'); 
+		print $this->gmap_inline_script;
+	} // function
+
+	
+	
+	
+// Based on code by http://gis.yohman.com/gmaps-plugin/
+function shortcode_gmap($attr) {
+	$this->gmap_flag = true;
+	// default atts
+	$attr = shortcode_atts(array(	
+									'lat'   => '0', 
+									'lon'    => '0',
+									'id' => 'map',
+									'z' => '1',
+									'w' => '400',
+									'h' => '300',
+									'maptype' => 'ROADMAP',
+									'address' => '',
+									'kml' => '',
+									'kmlautofit' => 'yes',
+									'marker' => '',
+									'markerimage' => '',
+									'traffic' => 'no',
+									'bike' => 'no',
+									'fusion' => '',
+									'start' => '',
+									'end' => '',
+									'infowindow' => '',
+									'infowindowdefault' => 'yes',
+									'directions' => '',
+									'hidecontrols' => 'false',
+									'scale' => 'false',
+									'scrollwheel' => 'true'
+									
+									), $attr);
+									
+	$attr['id'] .=  md5(serialize($attr)) ;
+
+	$returnme = '
+    <div id="' .$attr['id'] . '"  style="width:' . $attr['w'] . 'px;height:' . $attr['h'] . 'px;"></div>
+	';
+	
+	//directions panel
+	if($attr['start'] != '' && $attr['end'] != '') 
+	{
+		$panelwidth = $attr['w']-20;
+		$returnme .= '
+		<div id="directionsPanel" style="width:' . $panelwidth . 'px;height:' . $attr['h'] . 'px;border:1px solid gray;padding:10px;overflow:auto;"></div><br>
+		';
+	}
+
+
+	$this->gmap_inline_script .= '
+    
+
+    <script type="text/javascript">
+
+		var latlng = new google.maps.LatLng(' . $attr['lat'] . ', ' . $attr['lon'] . ');
+		var myOptions = {
+			zoom: ' . $attr['z'] . ',
+			center: latlng,
+			scrollwheel: ' . $attr['scrollwheel'] .',
+			scaleControl: ' . $attr['scale'] .',
+			disableDefaultUI: ' . $attr['hidecontrols'] .',
+			mapTypeId: google.maps.MapTypeId.' . $attr['maptype'] . '
+		};
+		var ' . $attr['id'] . ' = new google.maps.Map(document.getElementById("' . $attr['id'] . '"),
+		myOptions);
+		';
+				
+		//kml
+		if($attr['kml'] != '') 
+		{
+			if($attr['kmlautofit'] == 'no') 
+			{
+				$this->gmap_inline_script .= '
+				var kmlLayerOptions = {preserveViewport:true};
+				';
+			}
+			else
+			{
+				$this->gmap_inline_script .= '
+				var kmlLayerOptions = {preserveViewport:false};
+				';
+			}
+			$returnme .= '
+			var kmllayer = new google.maps.KmlLayer(\'' . html_entity_decode($attr['kml']) . '\',kmlLayerOptions);
+			kmllayer.setMap(' . $attr['id'] . ');
+			';
+		}
+
+		//directions
+		if($attr['start'] != '' && $attr['end'] != '') 
+		{
+			$this->gmap_inline_script .= '
+			var directionDisplay;
+			var directionsService = new google.maps.DirectionsService();
+		    directionsDisplay = new google.maps.DirectionsRenderer();
+		    directionsDisplay.setMap(' . $attr['id'] . ');
+    		directionsDisplay.setPanel(document.getElementById("directionsPanel"));
+
+				var start = \'' . $attr['start'] . '\';
+				var end = \'' . $attr['end'] . '\';
+				var request = {
+					origin:start, 
+					destination:end,
+					travelMode: google.maps.DirectionsTravelMode.DRIVING
+				};
+				directionsService.route(request, function(response, status) {
+					if (status == google.maps.DirectionsStatus.OK) {
+						directionsDisplay.setDirections(response);
+					}
+				});
+
+
+			';
+		}
+		
+		//traffic
+		if($attr['traffic'] == 'yes')
+		{
+			$this->gmap_inline_script .= '
+			var trafficLayer = new google.maps.TrafficLayer();
+			trafficLayer.setMap(' . $attr['id'] . ');
+			';
+		}
+	
+		//bike
+		if($attr['bike'] == 'yes')
+		{
+			$this->gmap_inline_script .= '			
+			var bikeLayer = new google.maps.BicyclingLayer();
+			bikeLayer.setMap(' . $attr['id'] . ');
+			';
+		}
+		
+		//fusion tables
+		if($attr['fusion'] != '')
+		{
+			$this->gmap_inline_script .= '			
+			var fusionLayer = new google.maps.FusionTablesLayer(' . $attr['fusion'] . ');
+			fusionLayer.setMap(' . $attr['id'] . ');
+			';
+		}
+	
+		//address
+		if($attr['address'] != '')
+		{
+			$this->gmap_inline_script .= '
+		    var geocoder_' . $attr['id'] . ' = new google.maps.Geocoder();
+			var address = \'' . $attr['address'] . '\';
+			geocoder_' . $attr['id'] . '.geocode( { \'address\': address}, function(results, status) {
+				if (status == google.maps.GeocoderStatus.OK) {
+					' . $attr['id'] . '.setCenter(results[0].geometry.location);
+					';
+					
+					if ($attr['marker'] !='')
+					{
+						//add custom image
+						if ($attr['markerimage'] !='')
+						{
+							$this->gmap_inline_script .= 'var image = "'. $attr['markerimage'] .'";';
+						}
+						$this->gmap_inline_script.= '
+						var marker = new google.maps.Marker({
+							map: ' . $attr['id'] . ', 
+							';
+							if ($attr['markerimage'] !='')
+							{
+								$returnme .= 'icon: image,';
+							}
+						$this->gmap_inline_script .= '
+							position: ' . $attr['id'] . '.getCenter()
+						});
+						';
+
+						//infowindow
+						if($attr['infowindow'] != '') 
+						{
+							//first convert and decode html chars
+							$thiscontent = htmlspecialchars_decode($attr['infowindow']);
+							$this->gmap_inline_script .= '
+							var contentString = \'' . $thiscontent . '\';
+							var infowindow = new google.maps.InfoWindow({
+								content: contentString
+							});
+										
+							google.maps.event.addListener(marker, \'click\', function() {
+							  infowindow.open(' . $attr['id'] . ',marker);
+							});
+							';
+
+							//infowindow default
+							if ($attr['infowindowdefault'] == 'yes')
+							{
+								$this->gmap_inline_script .= '
+									infowindow.open(' . $attr['id'] . ',marker);
+								';
+							}
+						}
+					}
+			$this->gmap_inline_script .= '
+				} else {
+				alert("Geocode was not successful for the following reason: " + status);
+			}
+			});
+			';
+		}
+
+		//marker: show if address is not specified
+		if ($attr['marker'] != '' && $attr['address'] == '')
+		{
+			//add custom image
+			if ($attr['markerimage'] !='')
+			{
+				$this->gmap_inline_script .= 'var image = "'. $attr['markerimage'] .'";';
+			}
+
+			$this->gmap_inline_script .= '
+				var marker = new google.maps.Marker({
+				map: ' . $attr['id'] . ', 
+				';
+				if ($attr['markerimage'] !='')
+				{
+					$returnme .= 'icon: image,';
+				}
+			$this->gmap_inline_script .= '
+				position: ' . $attr['id'] . '.getCenter()
+			});
+			';
+
+			//infowindow
+			if($attr['infowindow'] != '') 
+			{
+				$this->gmap_inline_script .= '
+				var contentString = \'' . $attr['infowindow'] . '\';
+				var infowindow = new google.maps.InfoWindow({
+					content: contentString
+				});
+							
+				google.maps.event.addListener(marker, \'click\', function() {
+				  infowindow.open(' . $attr['id'] . ',marker);
+				});
+				';
+				//infowindow default
+				if ($attr['infowindowdefault'] == 'yes')
+				{
+					$this->gmap_inline_script .= '
+						infowindow.open(' . $attr['id'] . ',marker);
+					';
+				}				
+			}
+		}
+
+	$this->gmap_inline_script .= '</script>';
+		
+		return $returnme;
+
+} // function
+
+	
+	
+	
+	
+	
+	
+	
 }
 
 
