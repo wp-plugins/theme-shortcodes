@@ -100,7 +100,7 @@ class wpThemeShortcodes {
 		add_shortcode('bloginfo', array(&$this,'shortcode_bloginfo'));
 		
 		// google plus one
-		add_shortcode('plusone', array(&$this,'shortcode_plusone'));
+		add_shortcode('plus', array(&$this,'shortcode_plusone'));
 		add_action('init', array(&$this, 'shortcode_plusone_register_script'));
 		add_action('wp_footer', array(&$this, 'shortcode_plusone_print_script'));	
 		
