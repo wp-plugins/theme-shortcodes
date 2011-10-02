@@ -3,7 +3,7 @@ Contributors: Rob Holmes
 Tags: Wordpress
 Requires at least: 3.0
 Tested up to: 3.0
-Stable Tag: 0.0.3
+Stable Tag: 0.0.4
 
 A collection of all handy theme related shortcodes, provided as a plugin so as to be theme agnostic
 https://github.com/OneManOneLaptop/theme-shortcodes
