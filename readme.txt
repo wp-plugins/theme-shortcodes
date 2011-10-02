@@ -1,5 +1,5 @@
 === Theme Shortcodes ===
-Contributors: Rob Holmes
+Contributors: rob-holmes,MemberBuddy
 Tags: Wordpress
 Requires at least: 3.0
 Tested up to: 3.0
