@@ -571,9 +571,18 @@ class wpThemeShortcodes {
 	/* =post-comments-count				
 	------------------------------------------------------------------------ */
 	function shortcode_comment_count( $attr ) {
+	
+		extract(shortcode_atts(
+			array(
+				'id' => 0,
+			),
+			$attr
+		));
+		
+	
 		$domain = $domian;
 		$comments_link = '';
-		$number = get_comments_number();
+		$number = get_comments_number($id);
 		return '<span class="comment-count">' . $number . " Comments" . "</span>";
 	} // function
 
@@ -583,7 +592,15 @@ class wpThemeShortcodes {
 
 	function shortcode_post_cats ($attr) {
 		global $post;
-		$post_categories = wp_get_post_categories( $post->ID );
+		extract(shortcode_atts(
+			array(
+				'id' => $post->ID,
+			),
+			$attr
+		));
+		
+		
+		$post_categories = wp_get_post_categories( $id );
 		$cats = array();
 			
 		foreach($post_categories as $c){
